@@ -42,7 +42,15 @@ def servers() -> dict:
             _loaded_at = time.monotonic() - 540
         if not _servers:
             account()
+            raise RuntimeError("Couldn't reach any media server. Is the computer running it awake?")
         return _servers
+
+
+def _server(name: str):
+    srv = servers().get(name)
+    if srv is None:
+        raise RuntimeError(f"The media server {name!r} isn't reachable right now.")
+    return srv
 
 
 def _summary(server: str, item) -> dict:
@@ -100,7 +108,7 @@ def browse(genre: str | None, kind: str, unwatched_only: bool, limit: int) -> li
 
 
 def set_audio_language(server: str, rating_key: int, language: str) -> dict:
-    item = servers()[server].fetchItem(rating_key)
+    item = _server(server).fetchItem(rating_key)
     videos = item.episodes() if item.type == "show" else [item]
     switched = missing = 0
     for v in videos:
@@ -116,13 +124,13 @@ def set_audio_language(server: str, rating_key: int, language: str) -> dict:
 
 
 def play_on(server: str, rating_key: int, host: str, player_id: str) -> str:
-    srv = servers()[server]
+    srv = _server(server)
     item = srv.fetchItem(rating_key)
     if item.type == "show":
-        item = item.onDeck() or item.episodes()[0]
+        item = item.onDeck() or next((e for e in item.episodes() if e.seasonNumber), item.episodes()[0])
     player = PlexClient(server=srv, baseurl=f"http://{host}:8324", identifier=player_id, token=srv._token, connect=False)
     player.machineIdentifier = player._clientIdentifier = player_id
     player.protocolCapabilities = ["playback", "navigation", "timeline"]
     player.product = "Roku"
-    player.playMedia(item)
+    player.playMedia(item, offset=item.viewOffset or 0)
     return item.title

@@ -53,9 +53,11 @@ def _tv(name: str | None) -> AppleTV | Roku:
         raise RuntimeError("No TVs configured in .env")
     if not name:
         return next(iter(remotes.values()))
-    for key, remote in remotes.items():
-        if name.lower() in key.lower():
-            return remote
+    name = name.lower().removesuffix(" (roku)")
+    exact = [r for k, r in remotes.items() if k.lower() == name]
+    loose = [r for k, r in remotes.items() if name in k.lower()]
+    if exact or loose:
+        return (exact or loose)[0]
     raise ValueError(f"No TV called {name!r}. TVs: {list(remotes)}")
 
 
@@ -160,7 +162,7 @@ async def library_play(server: str, rating_key: int, tv: str | None = None) -> s
         await asyncio.sleep(8)
     title = await asyncio.to_thread(library.play_on, server, rating_key, remote.tv["host"], remote.tv["player_id"])
     await asyncio.sleep(10)
-    return f"Sent {title}. " + await remote.status()
+    return f"Sent {title}. " + str(await _after(remote))
 
 
 @mcp.tool()
@@ -195,6 +197,13 @@ def history_rate(row_id: int, rating: str, notes: str | None = None) -> str:
 _ask_lock = asyncio.Lock()
 
 
+def _claude(home: str) -> str:
+    for path in (os.path.join(home, ".local", "bin", "claude"), "/opt/homebrew/bin/claude", "/usr/local/bin/claude"):
+        if os.access(path, os.X_OK):
+            return path
+    raise FileNotFoundError("claude")
+
+
 @mcp.custom_route("/ask", methods=["POST"])
 async def ask(request: Request) -> PlainTextResponse:
     """One-shot request for Siri Shortcuts: {"text": "..."} in, one spoken sentence out."""
@@ -220,7 +229,7 @@ async def _ask(text: str) -> PlainTextResponse:
         os.chown(cfg, owner.pw_uid, owner.pw_gid)
         try:
             proc = await asyncio.create_subprocess_exec(
-                os.path.join(owner.pw_dir, ".local", "bin", "claude"), "-p",
+                _claude(owner.pw_dir), "-p",
                 "--tools", "", "--setting-sources", "",
                 "--strict-mcp-config", "--mcp-config", cfg, "--allowedTools", "mcp__tv__*",
                 "--append-system-prompt", "Your final reply is read aloud by Siri: one short, friendly sentence, no formatting.",

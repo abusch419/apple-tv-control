@@ -281,3 +281,19 @@ def test_a_failed_screenshot_after_a_press_is_not_an_error(monkeypatch):
     real_sleep = asyncio.sleep
     monkeypatch.setattr(server.asyncio, "sleep", lambda s: real_sleep(0))
     assert asyncio.run(server.press(["select"], "t")).startswith("Sent.")
+
+
+def test_sonos_group_slider_moving_both_keeps_their_new_share():
+    from src.tv_mcp.sonos_follow import step
+    ratios, expected = {}, {}
+    step(40, None, {"roam": 20}, ratios, expected)
+    assert step(60, 40, {"roam": 30}, ratios, expected) == {}
+    assert step(30, 60, {"roam": 30}, ratios, expected) == {"roam": 15}
+
+
+def test_tv_names_prefer_an_exact_match_and_accept_the_roku_label(monkeypatch):
+    from src.tv_mcp import server
+    kids, bedroom = object(), object()
+    monkeypatch.setattr(server, "remotes", {"Kids Bedroom": kids, "Bedroom": bedroom})
+    assert server._tv("bedroom") is bedroom
+    assert server._tv("Bedroom (Roku)") is bedroom

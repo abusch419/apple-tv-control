@@ -84,7 +84,7 @@ def link_library() -> str:
 
 
 async def pair_tv(loop, conf, env, n):
-    existing = next((k[:-5] for k, v in env.items() if k.endswith("_NAME") and v == conf.name), None)
+    existing = next((k[:-5] for k, v in env.items() if k.startswith("ATV_") and k.endswith("_NAME") and v == conf.name), None)
     prefix = existing or f"ATV_{n}"
     credentials = await pair_remote(loop, conf)
     udid = await pair_screen(conf)

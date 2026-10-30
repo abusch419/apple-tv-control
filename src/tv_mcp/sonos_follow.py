@@ -11,8 +11,7 @@ def step(main_volume: int, last_main: int | None, members: dict, ratios: dict, e
     changes = {}
     for uid, current in members.items():
         if uid not in ratios or current != expected.get(uid, current):
-            base = last_main if last_main is not None else main_volume
-            ratios[uid] = current / base if base else ratios.get(uid, 1.0)
+            ratios[uid] = current / main_volume if main_volume else ratios.get(uid, 1.0)
             expected[uid] = current
         if last_main is not None and main_volume != last_main:
             target = max(0, min(100, round(main_volume * ratios[uid])))
