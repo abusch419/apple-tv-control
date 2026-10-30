@@ -98,5 +98,6 @@ def play_on(server: str, rating_key: int, host: str, player_id: str) -> str:
     player = PlexClient(server=srv, baseurl=f"http://{host}:8324", identifier=player_id, token=srv._token, connect=False)
     player.machineIdentifier = player._clientIdentifier = player_id
     player.protocolCapabilities = ["playback", "navigation", "timeline"]
+    player.product = "Roku"
     player.playMedia(item)
     return item.title
