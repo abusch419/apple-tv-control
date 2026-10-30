@@ -52,16 +52,22 @@ def _summary(server: str, item) -> dict:
 def search(query: str, limit: int = 10) -> list[dict]:
     results = []
     for name, srv in servers().items():
-        for item in srv.search(query, limit=limit):
-            if item.type in ("show", "movie"):
-                results.append(_summary(name, item))
+        try:
+            items = srv.search(query, limit=limit)
+        except Exception:
+            continue
+        results += [_summary(name, i) for i in items if i.type in ("show", "movie")]
     return results
 
 
 def browse(genre: str | None, kind: str, unwatched_only: bool, limit: int) -> list[dict]:
     results = []
     for name, srv in servers().items():
-        for section in srv.library.sections():
+        try:
+            sections = srv.library.sections()
+        except Exception:
+            continue
+        for section in sections:
             if section.type != kind:
                 continue
             filters = {"genre": genre} if genre else {}
@@ -95,6 +101,8 @@ def set_audio_language(server: str, rating_key: int, language: str) -> dict:
 def play_on(server: str, rating_key: int, host: str, player_id: str) -> str:
     srv = servers()[server]
     item = srv.fetchItem(rating_key)
+    if item.type == "show":
+        item = item.onDeck() or item.episodes()[0]
     player = PlexClient(server=srv, baseurl=f"http://{host}:8324", identifier=player_id, token=srv._token, connect=False)
     player.machineIdentifier = player._clientIdentifier = player_id
     player.protocolCapabilities = ["playback", "navigation", "timeline"]

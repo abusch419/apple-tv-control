@@ -35,7 +35,8 @@ async def pick_tv(loop):
     print("Looking for Apple TVs on this network...")
     tvs = [c for c in await pyatv.scan(loop, timeout=5) if "Apple TV" in str(c.device_info)]
     if not tvs:
-        sys.exit("No Apple TV found. Make sure it's on and on the same Wi-Fi as this Mac.")
+        print("No Apple TV found, skipping. Rokus need no pairing: see README.")
+        return None
     for i, c in enumerate(tvs, 1):
         print(f"  {i}. {c.name}  ({c.address})")
     choice = ask("Which TV? Type its number:") if len(tvs) > 1 else "1"
@@ -82,17 +83,9 @@ def link_library() -> str:
     return login.token
 
 
-async def main():
-    loop = asyncio.get_running_loop()
-    env = read_env()
-    n = 1
-    while f"ATV_{n}_NAME" in env:
-        n += 1
-
-    conf = await pick_tv(loop)
+async def pair_tv(loop, conf, env, n):
     existing = next((k[:-5] for k, v in env.items() if k.endswith("_NAME") and v == conf.name), None)
     prefix = existing or f"ATV_{n}"
-
     credentials = await pair_remote(loop, conf)
     udid = await pair_screen(conf)
     write_env({
@@ -104,6 +97,17 @@ async def main():
     print(f"\n{conf.name} is paired. If the service is already running, restart the screen connection so it picks this TV up:")
     print("  sudo launchctl kickstart -k system/com.appletvcontrol.tunneld")
 
+
+async def main():
+    loop = asyncio.get_running_loop()
+    env = read_env()
+    n = 1
+    while f"ATV_{n}_NAME" in env:
+        n += 1
+
+    conf = await pick_tv(loop)
+    if conf:
+        await pair_tv(loop, conf, env, n)
     if not env.get("LIBRARY_TOKEN") and ask("Do you have a media server library to link? (y/n)").lower().startswith("y"):
         write_env({"LIBRARY_TOKEN": link_library()})
         print("Media server linked.")

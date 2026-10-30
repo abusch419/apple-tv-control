@@ -11,7 +11,8 @@ An MCP server ("tv") that lets Claude pick something to watch and start it on an
 - Ask before anything public (new repo, release notes aside from version bumps the owner asked for).
 
 ## Decisions
-- Runs on an always-on Mac as two root LaunchDaemons (tunneld for screenshots, mcp on port 8790). The server restarts itself when its code changes.
+- Runs on an always-on Mac as two LaunchDaemons: tunneld (root, screenshots) and mcp on port 8790 (as the user; drops root itself if launched by an older plist). The server restarts itself when its code changes; updates re-run setup.sh.
+- /ask runs claude with no built-in tools, no setting sources and a throwaway HOME.
 - Media library first, streaming apps second.
 - Rokus are driven by Roku's network remote and get library titles pushed straight to the library app; they can't screenshot.
 - Product and docs never name the media server brand; it only appears in the library dependency.

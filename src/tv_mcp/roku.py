@@ -32,9 +32,14 @@ class Roku:
         for b in buttons:
             if b.startswith("wait:"):
                 await asyncio.sleep(min(float(b[5:]), 30))
+            elif b in ("play", "pause") and await self._playing() == (b == "play"):
+                continue
             else:
                 await asyncio.to_thread(self._call, f"/keypress/{KEYS[b]}", "POST")
                 await asyncio.sleep(0.5)
+
+    async def _playing(self) -> bool:
+        return '<player state="play"' in await asyncio.to_thread(self._call, "/query/media-player")
 
     async def type_text(self, text: str) -> None:
         for ch in text:

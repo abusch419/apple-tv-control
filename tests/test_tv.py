@@ -54,8 +54,10 @@ def test_auth_accepts_header_or_secret_path_and_rejects_others():
     assert call("/s3cret/mcp") == 200
     assert seen == ["/mcp", "/mcp"]
     assert call("/mcp") == 401
+    assert call("/mcp", [(b"authorization", b"Bearer wrong")]) == 401
     assert call("/wrong/mcp") == 401
     assert call("/s3cretX/mcp") == 401
+    assert seen == ["/mcp", "/mcp"]
 
 
 def test_sonos_group_follows_main_speaker_keeping_ratio():
@@ -96,7 +98,25 @@ def test_server_never_keeps_root(monkeypatch):
     from src.tv_mcp import server
     calls = []
     monkeypatch.setattr(server.os, "geteuid", lambda: 0)
+    monkeypatch.setenv("HOME", "/tmp")
     for fn in ("setgroups", "setgid", "setuid", "chown"):
-        monkeypatch.setattr(server.os, fn, lambda *a, fn=fn: calls.append(fn))
+        monkeypatch.setattr(server.os, fn, lambda *a, fn=fn: calls.append((fn, a)))
     server._drop_root()
-    assert calls[-3:] == ["setgroups", "setgid", "setuid"]
+    owner = server.ROOT.stat()
+    assert calls[-3:] == [("setgroups", ([],)), ("setgid", (owner.st_gid,)), ("setuid", (owner.st_uid,))]
+
+
+def test_roku_play_never_toggles_a_playing_show(monkeypatch):
+    from src.tv_mcp.roku import Roku
+    sent = []
+    r = Roku({"name": "guest", "host": "h", "player_id": "p"})
+    def call(path, method="GET"):
+        if method == "GET":
+            return '<player state="play" error="false">'
+        sent.append(path)
+        return ""
+    monkeypatch.setattr(r, "_call", call)
+    asyncio.run(r.press(["play"]))
+    assert sent == []
+    asyncio.run(r.press(["pause"]))
+    assert sent == ["/keypress/Play"]

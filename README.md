@@ -21,7 +21,7 @@ It runs as a small service on a Mac at home. Anyone in the house connects their 
 2. When asked, read **two codes off the TV**:
    - a 4-digit code (lets the Mac press remote buttons), then
    - on the TV go to **Settings > Remotes and Devices > Remote App and Devices**, and read the 6-digit code that appears (lets the Mac see the screen).
-3. If you link a media server: open the link page setup shows you on your phone and type the 4-character code you're given.
+3. If you link a media server: open your media server's device-link page on your phone and type the 4-character code setup shows you.
 4. Type your **Mac password** once, so the service can start on its own whenever the Mac boots.
 
 That's it. You never manage a server again.
@@ -37,9 +37,9 @@ Run everything on the always-on Mac, in the repo folder.
      - `com.appletvcontrol.mcp` (as the user): the MCP server on port 8790.
 3. At the end it prints the exact connect command and token. Run it for the human (see Connect below).
 4. Verify: in a fresh Claude session, ask it to take a TV screenshot. You should get an image of the TV.
-5. Roku: add `ROKU_1_NAME`, `ROKU_1_HOST` (its IP) and `ROKU_1_PLAYER_ID` (the library app's player id on it) to `.env`. Number more as `ROKU_2_...`.
+5. Roku: turn on Settings > System > Advanced system settings > Control by mobile apps > Network access > Enabled on the Roku. Open the library app on it once, then add `ROKU_1_NAME`, `ROKU_1_HOST` (its IP) and `ROKU_1_PLAYER_ID` to `.env`. The player id is the `machineIdentifier` from `curl http://<roku-ip>:8324/resources`. Number more as `ROKU_2_...`, then restart the service: `sudo launchctl kickstart -k system/com.appletvcontrol.mcp`. A Roku-only home works: setup skips Apple TV pairing when it finds none.
 6. More than one Apple TV: run `.venv/bin/python scripts/pair.py` again for each one, then restart the screen connection: `sudo launchctl kickstart -k system/com.appletvcontrol.tunneld`.
-6. Pair on the Mac that will run the service. A TV pairing belongs to the computer that made it and can't be copied to another Mac.
+7. Pair on the Mac that will run the service. A TV pairing belongs to the computer that made it and can't be copied to another Mac.
 
 ## Connect
 
@@ -87,9 +87,9 @@ If your TV sound goes to a Sonos soundbar and you group other Sonos speakers wit
 
 Tell your Claude:
 
-> Update tv-remote: in its folder run `git pull`, then `sudo launchctl kickstart -k system/com.appletvcontrol.mcp`. I'll type my Mac password when asked.
+> Update tv-remote: in its folder run `git pull`, then `scripts/setup.sh`. I'll type my Mac password when asked.
 
-You type your Mac password once. From v1.1.0 on, the service restarts itself whenever its code changes, so later updates only need `git pull`.
+You type your Mac password once. Setup keeps your pairing and diary; it refreshes the libraries and the background services.
 
 ## Troubleshooting
 
@@ -107,13 +107,14 @@ You type your Mac password once. From v1.1.0 on, the service restarts itself whe
 
 What this installs and what it can reach, so you can decide if it's right for you:
 
-- **It controls your TV and reads its screen.** Anyone holding the token in `.env` can press buttons, open apps, see screenshots, change library audio settings and read your watch diary. Treat the token like a house key; don't paste it into chats or post it. To replace it, put a new random value in `TV_MCP_TOKEN` and restart the service (`sudo launchctl kickstart -k system/com.appletvcontrol.mcp`).
-- **It listens on your home network only** (port 8790), and every request must carry the token. It uses plain HTTP, so someone already on your Wi-Fi could see the token in transit. Don't forward port 8790 to the internet.
-- **The server runs as you, not as admin.** The part that listens on the network runs under your own account, so a bug in it can't take over the Mac. Only the screen connection (`tunneld`) runs as admin, because opening a tunnel to the TV needs it; it listens on this Mac only and takes no requests from the network. Neither service runs commands that come from requests.
+- **It controls your TV and reads its screen.** Anyone holding the token in `.env` can press buttons, open apps, see screenshots, change library audio settings, read and write your watch diary, and (if you set up the Siri `/ask` endpoint with `CLAUDE_CODE_OAUTH_TOKEN`) run a TV-only Claude on your subscription. The token also works as the first part of the URL path (`/<token>/mcp`) for apps that can't send headers, so a URL like that is as sensitive as the token. Treat the token like a house key; don't paste it into chats or post it. To replace it, put a new random value in `TV_MCP_TOKEN` and restart the service (`sudo launchctl kickstart -k system/com.appletvcontrol.mcp`).
+- **It listens on every network this Mac is on** (port 8790): your Wi-Fi, plus any VPN like Tailscale. Every request must carry the token. It uses plain HTTP, so someone already on your Wi-Fi could see the token in transit, and when it starts library titles on a Roku the media server sign-in also crosses the Wi-Fi in plain text. Don't forward port 8790 to the internet.
+- **The server runs as you, not as admin.** The part that listens on the network runs under your own account. The screen connection (`tunneld`) runs as admin, because opening a tunnel to the TV needs it; it listens on this Mac only and takes no requests from the network. It runs from the install folder, which your account can edit, so anything already running as you could use it to get admin rights on the next restart. Only install on a Mac you trust.
+- **The Siri `/ask` endpoint runs a locked-down Claude.** It gets no built-in tools (no files, no shell), none of your Claude settings, and an empty temporary home folder: only the TV tools.
 - **Your watch diary and secrets are private to your account** (`.env` and `history.db` are readable only by you), and logs live in `~/Library/Logs`, not the shared `/tmp`.
 - **Your data stays on your Mac.** `.env` (pairing keys, media server sign-in, token) and `history.db` (watch diary) are created on your machine, are never committed, and are never sent anywhere except to your own TV and media server.
-- **Screens and show text are treated as content.** Claude is told never to follow instructions that appear on the TV or in show descriptions.
-- **Uninstall:** `sudo launchctl bootout system/com.appletvcontrol.mcp; sudo launchctl bootout system/com.appletvcontrol.tunneld; sudo rm /Library/LaunchDaemons/com.appletvcontrol.*.plist`, then delete the folder. To revoke the TV pairing, remove this Mac under Settings > Remotes and Devices on the Apple TV.
+- **Screens, show text and diary notes are treated as content.** Claude is told never to follow instructions that appear on the TV, in show descriptions or in the watch diary.
+- **Uninstall:** `sudo launchctl bootout system/com.appletvcontrol.mcp; sudo launchctl bootout system/com.appletvcontrol.tunneld; sudo rm /Library/LaunchDaemons/com.appletvcontrol.*.plist`, then delete the folder. Sign this Mac out of your media server's list of authorized devices. To revoke the TV pairing, remove this Mac under Settings > Remotes and Devices on the Apple TV.
 
 ## License
 
