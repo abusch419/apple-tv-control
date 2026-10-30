@@ -112,7 +112,7 @@ def _tunnels_for(udid: str) -> list[list[str]]:
     except OSError:
         raise RuntimeError("The screen connection service (tunneld) isn't running. See README: Troubleshooting.")
     others = {t["udid"] for t in TVS} - {udid}
-    entries = (tunnels.get(udid) or []) + [e for k, v in tunnels.items() if k != udid and k not in others for e in v]
+    entries = tunnels.get(udid) or [e for k, v in tunnels.items() if k not in others for e in v]
     if not entries:
         raise RuntimeError("No screen connection to this TV yet. It reconnects on its own within a minute; if not, see README: Troubleshooting.")
     return [[e["tunnel-address"], str(e["tunnel-port"])] for e in entries]

@@ -80,7 +80,7 @@ def test_screenshot_never_falls_back_to_another_paired_tv(monkeypatch):
     monkeypatch.setattr(appletv, "TVS", [{"udid": "KITCHEN"}, {"udid": "BASEMENT"}])
     monkeypatch.setattr(appletv.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(json.dumps(tunnels).encode()))
     assert appletv._tunnels_for("BASEMENT") == [["o", "2"]]
-    assert appletv._tunnels_for("KITCHEN") == [["k", "1"], ["o", "2"]]
+    assert appletv._tunnels_for("KITCHEN") == [["k", "1"]]
 
 
 def test_roku_maps_buttons_and_rejects_unknown(monkeypatch):
@@ -142,7 +142,7 @@ def test_ask_runs_claude_with_no_tools_and_a_minimal_env(monkeypatch):
             return b"ok", b""
 
     async def fake_exec(*args, **kw):
-        seen.update(args=args, env=kw["env"])
+        seen.update(args=args, env=kw["env"], cwd=kw["cwd"])
         return Proc()
 
     class Req:
@@ -155,6 +155,8 @@ def test_ask_runs_claude_with_no_tools_and_a_minimal_env(monkeypatch):
     a = seen["args"]
     assert a[a.index("--tools") + 1] == "" and "--strict-mcp-config" in a and a[a.index("--allowedTools") + 1] == "mcp__tv__*"
     assert set(seen["env"]) == {"HOME", "PATH", "CLAUDE_CODE_OAUTH_TOKEN"}
+    assert a[a.index("--setting-sources") + 1] == ""
+    assert seen["env"]["HOME"] == seen["cwd"] and not seen["cwd"].startswith(str(server.Path.home()))
 
 
 def test_server_drops_root_and_refuses_to_start_without_a_token(monkeypatch):
@@ -189,3 +191,64 @@ def test_roku_play_does_not_toggle_while_buffering(monkeypatch):
     monkeypatch.setattr(r, "_call", lambda path, method="GET": '<player state="buffer">' if method == "GET" else sent.append(path) or "")
     asyncio.run(r.press(["play"]))
     assert sent == []
+
+
+def test_ask_runs_one_at_a_time(monkeypatch):
+    from src.tv_mcp import server
+
+    class Req:
+        async def json(self):
+            return {"text": "x"}
+
+    async def go():
+        monkeypatch.setattr(server, "CLAUDE_CODE_OAUTH_TOKEN", "oauth")
+        async with server._ask_lock:
+            return await server.ask(Req())
+    assert asyncio.run(go()).status_code == 409
+
+
+def test_library_refresh_keeps_servers_when_the_account_service_is_down(monkeypatch):
+    from src.tv_mcp import library
+
+    class Acct:
+        def resources(self):
+            raise ConnectionError
+    monkeypatch.setattr(library, "account", lambda: Acct())
+    monkeypatch.setattr(library, "_servers", {"home": "srv"})
+    monkeypatch.setattr(library, "_loaded_at", 0.0)
+    assert library.servers() == {"home": "srv"}
+
+
+def test_library_play_opens_the_library_app_on_the_roku_first(monkeypatch):
+    from src.tv_mcp import server
+    from src.tv_mcp.roku import Roku
+    done = []
+    r = Roku({"name": "g", "host": "h", "player_id": "p"})
+
+    async def apps():
+        return [("Netflix", "12"), ("Media Free Movies", "13535")]
+
+    async def note(*a):
+        done.append(a)
+
+    async def status():
+        return "ok"
+    monkeypatch.setattr(r, "apps", apps)
+    monkeypatch.setattr(r, "wake", lambda: note("wake"))
+    monkeypatch.setattr(r, "launch", lambda i: note("launch", i))
+    monkeypatch.setattr(r, "status", status)
+    monkeypatch.setattr(server, "remotes", {"g": r})
+    monkeypatch.setattr(server, "LIBRARY_APP", "media")
+    monkeypatch.setattr(server.library, "play_on", lambda *a: done.append(("play",)) or "X")
+    monkeypatch.setattr(server.asyncio, "sleep", lambda s: note())
+    asyncio.run(server.library_play("srv", 1, "g"))
+    assert done[:3] == [("wake",), ("launch", "13535"), ()] and ("play",) in done
+
+
+def test_roku_pause_is_sent_when_the_state_is_unknown(monkeypatch):
+    from src.tv_mcp.roku import Roku
+    sent = []
+    r = Roku({"name": "g", "host": "h", "player_id": "p"})
+    monkeypatch.setattr(r, "_call", lambda path, method="GET": '<player state="close">' if method == "GET" else sent.append(path) or "")
+    asyncio.run(r.press(["pause"]))
+    assert sent == ["/keypress/Play"]

@@ -1,3 +1,4 @@
+import threading
 import time
 from functools import cache
 
@@ -16,21 +17,28 @@ def account() -> MyPlexAccount:
 
 _servers: dict = {}
 _loaded_at = 0.0
+_refresh = threading.Lock()
 
 
 def servers() -> dict:
-    global _loaded_at
-    if time.monotonic() - _loaded_at > 600:
-        _servers.clear()
-        _loaded_at = time.monotonic()
-        for r in account().resources():
-            if "server" not in (r.provides or ""):
-                continue
-            try:
-                _servers[r.name] = r.connect(timeout=10)
-            except Exception:
-                pass
-    return _servers
+    global _servers, _loaded_at
+    with _refresh:
+        if _servers and time.monotonic() - _loaded_at < 600:
+            return _servers
+        fresh = {}
+        try:
+            for r in account().resources():
+                if "server" not in (r.provides or ""):
+                    continue
+                try:
+                    fresh[r.name] = r.connect(timeout=10)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        if fresh:
+            _servers, _loaded_at = fresh, time.monotonic()
+        return _servers
 
 
 def _summary(server: str, item) -> dict:
