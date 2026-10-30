@@ -65,6 +65,13 @@ async def _shot(tv: AppleTV | Roku) -> Image | str:
     return Image(data=await tv.screenshot(), format="jpeg")
 
 
+async def _after(tv: AppleTV | Roku) -> Image | str:
+    try:
+        return await _shot(tv)
+    except Exception as e:
+        return f"Sent. Screenshot unavailable ({e}); don't repeat the input, take a screenshot later."
+
+
 @mcp.tool()
 def list_tvs() -> list[str]:
     """Names of the paired TVs, marked (Roku) where it can't send screenshots. The first one is the default."""
@@ -80,12 +87,12 @@ async def screenshot(tv: str | None = None) -> Image | str:
 @mcp.tool()
 async def press(buttons: list[str], tv: str | None = None) -> Image | str:
     """Press remote buttons in order, then return a screenshot.
-    Buttons: up, down, left, right, select, menu (back), home, play, pause (these never toggle: play on something playing does nothing),
+    Buttons: up, down, left, right, select, menu (back), home, play, pause (play on something playing does nothing; on a Roku app that doesn't report its player they toggle, so check after),
     skip_forward, skip_backward, volume_up, volume_down. Add "wait:2" to pause 2 seconds between presses."""
     remote = _tv(tv)
     await remote.press(buttons)
     await asyncio.sleep(1)
-    return await _shot(remote)
+    return await _after(remote)
 
 
 @mcp.tool()
@@ -94,7 +101,7 @@ async def type_text(text: str, tv: str | None = None) -> Image | str:
     remote = _tv(tv)
     await remote.type_text(text)
     await asyncio.sleep(2)
-    return await _shot(remote)
+    return await _after(remote)
 
 
 @mcp.tool()
@@ -110,7 +117,7 @@ async def open_app(app: str, tv: str | None = None) -> Image | str:
     await remote.wake()
     await remote.launch(bundle)
     await asyncio.sleep(4)
-    return await _shot(remote)
+    return await _after(remote)
 
 
 @mcp.tool()

@@ -39,7 +39,7 @@ class Roku:
                 await asyncio.sleep(0.5)
 
     async def _skip(self, button: str) -> bool:
-        found = re.search(r'<player state="(\w+)"', await asyncio.to_thread(self._call, "/query/media-player"))
+        found = re.search(r'<player[^>]*\bstate="(\w+)"', await asyncio.to_thread(self._call, "/query/media-player"))
         state = found.group(1) if found else ""
         return state in ("play", "buffer", "startup") if button == "play" else state == "pause"
 
@@ -61,7 +61,7 @@ class Roku:
         app = await asyncio.to_thread(self._call, "/query/active-app")
         player = await asyncio.to_thread(self._call, "/query/media-player")
         name = re.search(r"<app[^>]*>([^<]+)</app>", app)
-        state = re.search(r'<player state="(\w+)"', player)
+        state = re.search(r'<player[^>]*\bstate="(\w+)"', player)
         pos = re.search(r"<position>(\d+) ms", player)
         out = f"App: {name.group(1) if name else 'home screen'}. Player: {state.group(1) if state else 'idle'}"
         return out + (f" at {int(pos.group(1)) // 60000} min." if pos else ".")

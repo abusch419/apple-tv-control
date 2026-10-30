@@ -21,4 +21,4 @@ An MCP server ("tv") that lets Claude pick something to watch and start it on an
 ## Rejected
 - Xcode or developer-mode tooling beyond pymobiledevice3's tunnel.
 - Pushing library titles to the Apple TV's library app: it doesn't answer reliably (works on Roku).
-- Falling back to another TV's screen connection (showed the wrong TV).
+- Falling back to another TV's screen connection (showed the wrong TV). Screenshots use the TV's own tunnel; only when it has none do they fall back to a tunnel that isn't another configured TV (saved IDs can drift).

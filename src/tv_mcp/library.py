@@ -38,6 +38,10 @@ def servers() -> dict:
             pass
         if fresh:
             _servers, _loaded_at = fresh, time.monotonic()
+        else:
+            _loaded_at = time.monotonic() - 540
+        if not _servers:
+            account()
         return _servers
 
 

@@ -11,6 +11,8 @@ def test_history_roundtrip(tmp_path):
     a = history.add(db, "FROM", 2022, "Home server", "2026-10-25", "S1E1")
     history.add(db, "Midnight Mass", 2021, "Netflix", "2026-10-26")
     history.rate(db, a, "liked", "loved the ending")
+    import os, stat
+    assert stat.S_IMODE(os.stat(tmp_path / "h.db").st_mode) == 0o600
     rows = history.recent(db)
     assert [r["title"] for r in rows] == ["Midnight Mass", "FROM"]
     assert rows[1]["rating"] == "liked" and rows[1]["notes"] == "loved the ending"
@@ -203,7 +205,7 @@ def test_ask_runs_one_at_a_time(monkeypatch):
     async def go():
         monkeypatch.setattr(server, "CLAUDE_CODE_OAUTH_TOKEN", "oauth")
         async with server._ask_lock:
-            return await server.ask(Req())
+            return await asyncio.wait_for(server.ask(Req()), 2)
     assert asyncio.run(go()).status_code == 409
 
 
@@ -252,3 +254,30 @@ def test_roku_pause_is_sent_when_the_state_is_unknown(monkeypatch):
     monkeypatch.setattr(r, "_call", lambda path, method="GET": '<player state="close">' if method == "GET" else sent.append(path) or "")
     asyncio.run(r.press(["pause"]))
     assert sent == ["/keypress/Play"]
+
+
+def test_server_only_serves_through_the_token_check(monkeypatch):
+    from src.tv_mcp import server
+    served = []
+    monkeypatch.setattr(server, "TOKEN", "t")
+    monkeypatch.setattr(server, "SONOS_FOLLOW_ROOM", "")
+    monkeypatch.setattr(server, "_drop_root", lambda: None)
+    monkeypatch.setattr(server.threading, "Thread", lambda **k: type("T", (), {"start": lambda self: None})())
+    monkeypatch.setattr(server.uvicorn, "run", lambda app, **k: served.append(app))
+    server.main()
+    assert isinstance(served[0], server.BearerAuth)
+
+
+def test_a_failed_screenshot_after_a_press_is_not_an_error(monkeypatch):
+    from src.tv_mcp import server
+
+    class TV:
+        async def press(self, b):
+            pass
+
+        async def screenshot(self):
+            raise RuntimeError("tunnel down")
+    monkeypatch.setattr(server, "remotes", {"t": TV()})
+    real_sleep = asyncio.sleep
+    monkeypatch.setattr(server.asyncio, "sleep", lambda s: real_sleep(0))
+    assert asyncio.run(server.press(["select"], "t")).startswith("Sent.")
