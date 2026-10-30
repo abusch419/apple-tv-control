@@ -1,0 +1,8 @@
+pyatv==0.18.0
+plexapi==4.18.3
+pymobiledevice3==11.44.0
+mcp==2.3.0
+pillow==13.0.0
+python-dotenv==1.2.4
+pytest==9.1.1
+soco==0.32.0

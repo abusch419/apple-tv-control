@@ -1,0 +1,8 @@
+.env
+venv/
+venv313/
+.venv/
+*.log
+__pycache__/
+history.db
+.pytest_cache/
