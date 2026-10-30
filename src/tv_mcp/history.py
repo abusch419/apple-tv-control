@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from datetime import date
 
@@ -14,6 +15,7 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS watched (
 
 def connect(path: str) -> sqlite3.Connection:
     db = sqlite3.connect(path, check_same_thread=False)
+    os.chmod(path, 0o600)
     db.row_factory = sqlite3.Row
     db.execute(SCHEMA)
     return db

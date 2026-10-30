@@ -12,8 +12,9 @@ grep -q '^ATV_1_NAME=' .env 2>/dev/null || .venv/bin/python scripts/pair.py
 chmod 600 .env
 
 sudo -v
+[ -e history.db ] && sudo chown "$USER" history.db
 sed -e "s|__REPO__|$REPO|g" -e "s|__HOME__|$HOME|g" scripts/tunneld.plist | sudo tee /Library/LaunchDaemons/com.appletvcontrol.tunneld.plist >/dev/null
-sed -e "s|__REPO__|$REPO|g" -e "s|__HOME__|$HOME|g" scripts/mcp.plist | sudo tee /Library/LaunchDaemons/com.appletvcontrol.mcp.plist >/dev/null
+sed -e "s|__REPO__|$REPO|g" -e "s|__HOME__|$HOME|g" -e "s|__USER__|$USER|g" scripts/mcp.plist | sudo tee /Library/LaunchDaemons/com.appletvcontrol.mcp.plist >/dev/null
 for svc in tunneld mcp; do
   sudo launchctl bootout system/com.appletvcontrol.$svc 2>/dev/null || true
   while sudo launchctl print system/com.appletvcontrol.$svc >/dev/null 2>&1; do sleep 1; done

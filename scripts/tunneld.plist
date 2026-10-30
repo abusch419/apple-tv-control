@@ -13,6 +13,6 @@
   <dict><key>HOME</key><string>__HOME__</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardErrorPath</key><string>/tmp/appletvcontrol-tunneld.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/tv-remote-tunneld.log</string>
 </dict>
 </plist>

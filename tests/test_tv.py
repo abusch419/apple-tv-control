@@ -90,3 +90,13 @@ def test_roku_maps_buttons_and_rejects_unknown(monkeypatch):
     assert sent == [("/keypress/Up", "POST"), ("/keypress/Select", "POST"), ("/keypress/Back", "POST")]
     with pytest.raises(ValueError, match="Unknown buttons"):
         asyncio.run(r.press(["jump"]))
+
+
+def test_server_never_keeps_root(monkeypatch):
+    from src.tv_mcp import server
+    calls = []
+    monkeypatch.setattr(server.os, "geteuid", lambda: 0)
+    for fn in ("setgroups", "setgid", "setuid", "chown"):
+        monkeypatch.setattr(server.os, fn, lambda *a, fn=fn: calls.append(fn))
+    server._drop_root()
+    assert calls[-3:] == ["setgroups", "setgid", "setuid"]

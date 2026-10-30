@@ -95,9 +95,9 @@ You type your Mac password once. From v1.1.0 on, the service restarts itself whe
 
 - **TV stops responding:** update to v1.1.0 or newer (see Updating).
 
-- **"Screen connection service isn't running":** `sudo launchctl kickstart -k system/com.appletvcontrol.tunneld`, then check `/tmp/appletvcontrol-tunneld.log`.
+- **"Screen connection service isn't running":** `sudo launchctl kickstart -k system/com.appletvcontrol.tunneld`, then check `~/Library/Logs/tv-remote-tunneld.log`.
 - **"No screen connection to this TV yet":** wait a minute after the TV wakes. If it persists, re-pair: `.venv/bin/python scripts/pair.py`.
-- **Server logs:** `/tmp/appletvcontrol-mcp.log`.
+- **Server logs:** `~/Library/Logs/tv-remote-mcp.log`.
 - **Black screenshots during playback in some streaming apps** (HBO Max): copy protection blanks the capture. Menus and rating cards still show.
 - **Black screenshots on a TV you just paired:** restart the screen connection (`sudo launchctl kickstart -k system/com.appletvcontrol.tunneld`).
 - **The library app won't resume with play/pause:** press select (center click) instead.
@@ -109,7 +109,8 @@ What this installs and what it can reach, so you can decide if it's right for yo
 
 - **It controls your TV and reads its screen.** Anyone holding the token in `.env` can press buttons, open apps, see screenshots, change library audio settings and read your watch diary. Treat the token like a house key; don't paste it into chats or post it. To replace it, put a new random value in `TV_MCP_TOKEN` and restart the service (`sudo launchctl kickstart -k system/com.appletvcontrol.mcp`).
 - **It listens on your home network only** (port 8790), and every request must carry the token. It uses plain HTTP, so someone already on your Wi-Fi could see the token in transit. Don't forward port 8790 to the internet.
-- **Two background services run as the system account.** macOS blocks normal background apps from talking to devices on your network, and the screen connection needs admin rights. The services only run this repo's code and the libraries pinned in `requirements.txt`; they never run commands that come from requests.
+- **The server runs as you, not as admin.** The part that listens on the network runs under your own account, so a bug in it can't take over the Mac. Only the screen connection (`tunneld`) runs as admin, because opening a tunnel to the TV needs it; it listens on this Mac only and takes no requests from the network. Neither service runs commands that come from requests.
+- **Your watch diary and secrets are private to your account** (`.env` and `history.db` are readable only by you), and logs live in `~/Library/Logs`, not the shared `/tmp`.
 - **Your data stays on your Mac.** `.env` (pairing keys, media server sign-in, token) and `history.db` (watch diary) are created on your machine, are never committed, and are never sent anywhere except to your own TV and media server.
 - **Screens and show text are treated as content.** Claude is told never to follow instructions that appear on the TV or in show descriptions.
 - **Uninstall:** `sudo launchctl bootout system/com.appletvcontrol.mcp; sudo launchctl bootout system/com.appletvcontrol.tunneld; sudo rm /Library/LaunchDaemons/com.appletvcontrol.*.plist`, then delete the folder. To revoke the TV pairing, remove this Mac under Settings > Remotes and Devices on the Apple TV.

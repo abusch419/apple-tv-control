@@ -237,7 +237,20 @@ def _exit_when_code_changes() -> None:
             os._exit(0)
 
 
+def _drop_root() -> None:
+    if os.geteuid() != 0:
+        return
+    owner = pwd.getpwuid(ROOT.stat().st_uid)
+    if Path(HISTORY_DB).exists():
+        os.chown(HISTORY_DB, owner.pw_uid, owner.pw_gid)
+    os.setgroups([])
+    os.setgid(owner.pw_gid)
+    os.setuid(owner.pw_uid)
+    os.environ["HOME"] = owner.pw_dir
+
+
 def main() -> None:
+    _drop_root()
     threading.Thread(target=_exit_when_code_changes, daemon=True).start()
     if not TOKEN:
         raise SystemExit("Set TV_MCP_TOKEN in .env first (scripts/setup.sh does this).")

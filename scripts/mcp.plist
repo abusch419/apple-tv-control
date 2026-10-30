@@ -3,6 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.appletvcontrol.mcp</string>
+  <key>UserName</key><string>__USER__</string>
   <key>EnvironmentVariables</key>
   <dict><key>HOME</key><string>__HOME__</string></dict>
   <key>WorkingDirectory</key><string>__REPO__</string>
@@ -14,6 +15,6 @@
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardErrorPath</key><string>/tmp/appletvcontrol-mcp.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/tv-remote-mcp.log</string>
 </dict>
 </plist>
