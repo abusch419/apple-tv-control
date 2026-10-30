@@ -1,3 +1,4 @@
+import time
 from functools import cache
 
 from plexapi.client import PlexClient
@@ -14,10 +15,14 @@ def account() -> MyPlexAccount:
 
 
 _servers: dict = {}
+_loaded_at = 0.0
 
 
 def servers() -> dict:
-    if not _servers:
+    global _loaded_at
+    if time.monotonic() - _loaded_at > 600:
+        _servers.clear()
+        _loaded_at = time.monotonic()
         for r in account().resources():
             if "server" not in (r.provides or ""):
                 continue

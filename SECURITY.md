@@ -6,7 +6,7 @@ Please report security problems privately: on GitHub, open the **Security** tab 
 
 ## Supported versions
 
-Only the latest release gets fixes. Update with `git pull` in the install folder.
+Only the latest release gets fixes. Update the way README "Updating" describes (`git pull`, then `scripts/setup.sh`).
 
 ## What's in scope
 

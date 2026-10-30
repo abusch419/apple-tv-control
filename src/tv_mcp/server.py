@@ -39,6 +39,8 @@ Routine for "we want to watch X":
 6. Confirm playback from a screenshot or now_playing (video playing, no menus), then history_log it with the source and a short note (episode, who asked).
 7. Whenever they say anything about a title ("loved it", "too slow", "next"), history_rate it right away with their words in notes.
 
+Never rent, buy or subscribe to anything: if a title needs payment, say the price and stop.
+
 If they say "next" or "not that", rate the current pick disliked and go back to step 3 with the next one."""
 
 mcp = MCPServer("tv", instructions=INSTRUCTIONS)
@@ -144,6 +146,11 @@ async def library_play(server: str, rating_key: int, tv: str | None = None) -> s
     remote = _tv(tv)
     if not isinstance(remote, Roku):
         raise ValueError("library_play is for Roku TVs. On an Apple TV, drive the library app with the remote.")
+    library_app = [i for n, i in await remote.apps() if LIBRARY_APP and n.lower().startswith(LIBRARY_APP.lower())]
+    await remote.wake()
+    if library_app:
+        await remote.launch(library_app[0])
+        await asyncio.sleep(8)
     title = await asyncio.to_thread(library.play_on, server, rating_key, remote.tv["host"], remote.tv["player_id"])
     await asyncio.sleep(10)
     return f"Sent {title}. " + await remote.status()
@@ -178,6 +185,9 @@ def history_rate(row_id: int, rating: str, notes: str | None = None) -> str:
     return "saved"
 
 
+_ask_lock = asyncio.Lock()
+
+
 @mcp.custom_route("/ask", methods=["POST"])
 async def ask(request: Request) -> PlainTextResponse:
     """One-shot request for Siri Shortcuts: {"text": "..."} in, one spoken sentence out."""
@@ -186,6 +196,13 @@ async def ask(request: Request) -> PlainTextResponse:
         return PlainTextResponse("Tell me what you want to watch.", status_code=400)
     if not CLAUDE_CODE_OAUTH_TOKEN:
         return PlainTextResponse("Ask isn't set up yet: add CLAUDE_CODE_OAUTH_TOKEN to .env.", status_code=503)
+    if _ask_lock.locked():
+        return PlainTextResponse("Already on it.", status_code=409)
+    async with _ask_lock:
+        return await _ask(text)
+
+
+async def _ask(text: str) -> PlainTextResponse:
     owner = pwd.getpwuid(ROOT.stat().st_uid)
     config = {"mcpServers": {"tv": {"type": "http", "url": f"http://127.0.0.1:{PORT}/mcp", "headers": {"Authorization": f"Bearer {TOKEN}"}}}}
     with tempfile.TemporaryDirectory() as home:
@@ -209,6 +226,7 @@ async def ask(request: Request) -> PlainTextResponse:
             return PlainTextResponse("Claude isn't installed on the TV Mac.", status_code=503)
         except asyncio.TimeoutError:
             proc.kill()
+            await proc.wait()
             return PlainTextResponse("That took too long. Check the TV.", status_code=504)
     if proc.returncode:
         print(err.decode()[-2000:], file=sys.stderr)
@@ -218,6 +236,8 @@ async def ask(request: Request) -> PlainTextResponse:
 
 class BearerAuth:
     def __init__(self, app, token: str):
+        if not token:
+            raise ValueError("TV_MCP_TOKEN is empty")
         self.app = app
         self.expected = f"Bearer {token}".encode()
         self.prefix = f"/{token}"

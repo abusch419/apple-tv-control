@@ -39,7 +39,8 @@ class Roku:
                 await asyncio.sleep(0.5)
 
     async def _playing(self) -> bool:
-        return '<player state="play"' in await asyncio.to_thread(self._call, "/query/media-player")
+        state = re.search(r'<player state="(\w+)"', await asyncio.to_thread(self._call, "/query/media-player"))
+        return bool(state) and state.group(1) in ("play", "buffer", "startup")
 
     async def type_text(self, text: str) -> None:
         for ch in text:

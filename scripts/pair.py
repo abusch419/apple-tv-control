@@ -35,7 +35,7 @@ async def pick_tv(loop):
     print("Looking for Apple TVs on this network...")
     tvs = [c for c in await pyatv.scan(loop, timeout=5) if "Apple TV" in str(c.device_info)]
     if not tvs:
-        print("No Apple TV found, skipping. Rokus need no pairing: see README.")
+        print("No Apple TV found, skipping. Rokus need no pairing (see README). To pair an Apple TV later, wake it and run: .venv/bin/python scripts/pair.py")
         return None
     for i, c in enumerate(tvs, 1):
         print(f"  {i}. {c.name}  ({c.address})")
@@ -94,8 +94,8 @@ async def pair_tv(loop, conf, env, n):
         f"{prefix}_COMPANION": credentials,
         f"{prefix}_UDID": udid,
     })
-    print(f"\n{conf.name} is paired. If the service is already running, restart the screen connection so it picks this TV up:")
-    print("  sudo launchctl kickstart -k system/com.appletvcontrol.tunneld")
+    print(f"\n{conf.name} is paired. If the service is already running, restart it so it picks this TV up:")
+    print("  sudo launchctl kickstart -k system/com.appletvcontrol.tunneld && sudo launchctl kickstart -k system/com.appletvcontrol.mcp")
 
 
 async def main():

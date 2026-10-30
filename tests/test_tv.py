@@ -102,8 +102,9 @@ def test_server_never_keeps_root(monkeypatch):
     for fn in ("setgroups", "setgid", "setuid", "chown"):
         monkeypatch.setattr(server.os, fn, lambda *a, fn=fn: calls.append((fn, a)))
     server._drop_root()
-    owner = server.ROOT.stat()
-    assert calls[-3:] == [("setgroups", ([],)), ("setgid", (owner.st_gid,)), ("setuid", (owner.st_uid,))]
+    import pwd
+    owner = pwd.getpwuid(server.ROOT.stat().st_uid)
+    assert calls[-3:] == [("setgroups", ([],)), ("setgid", (owner.pw_gid,)), ("setuid", (owner.pw_uid,))]
 
 
 def test_roku_play_never_toggles_a_playing_show(monkeypatch):
@@ -120,3 +121,71 @@ def test_roku_play_never_toggles_a_playing_show(monkeypatch):
     assert sent == []
     asyncio.run(r.press(["pause"]))
     assert sent == ["/keypress/Play"]
+
+
+def test_roku_pause_never_resumes_a_paused_show(monkeypatch):
+    from src.tv_mcp.roku import Roku
+    sent = []
+    r = Roku({"name": "g", "host": "h", "player_id": "p"})
+    monkeypatch.setattr(r, "_call", lambda path, method="GET": '<player state="pause">' if method == "GET" else sent.append(path) or "")
+    asyncio.run(r.press(["pause"]))
+    assert sent == []
+
+
+def test_ask_runs_claude_with_no_tools_and_a_minimal_env(monkeypatch):
+    from src.tv_mcp import server
+    seen = {}
+
+    class Proc:
+        returncode = 0
+        async def communicate(self, _):
+            return b"ok", b""
+
+    async def fake_exec(*args, **kw):
+        seen.update(args=args, env=kw["env"])
+        return Proc()
+
+    class Req:
+        async def json(self):
+            return {"text": "play FROM"}
+
+    monkeypatch.setattr(server, "CLAUDE_CODE_OAUTH_TOKEN", "oauth")
+    monkeypatch.setattr(server.asyncio, "create_subprocess_exec", fake_exec)
+    asyncio.run(server.ask(Req()))
+    a = seen["args"]
+    assert a[a.index("--tools") + 1] == "" and "--strict-mcp-config" in a and a[a.index("--allowedTools") + 1] == "mcp__tv__*"
+    assert set(seen["env"]) == {"HOME", "PATH", "CLAUDE_CODE_OAUTH_TOKEN"}
+
+
+def test_server_drops_root_and_refuses_to_start_without_a_token(monkeypatch):
+    from src.tv_mcp import server
+    dropped = []
+    monkeypatch.setattr(server, "TOKEN", "")
+    monkeypatch.setattr(server, "_drop_root", lambda: dropped.append(1))
+    monkeypatch.setattr(server, "_exit_when_code_changes", lambda: None)
+    monkeypatch.setattr(server.uvicorn, "run", lambda *a, **k: None)
+    with pytest.raises(SystemExit):
+        server.main()
+    assert dropped
+
+
+def test_unknown_tv_name_is_an_error_not_the_default_tv(monkeypatch):
+    from src.tv_mcp import server
+    monkeypatch.setattr(server, "remotes", {"Living room": object(), "Kids": object()})
+    with pytest.raises(ValueError):
+        server._tv("garage")
+
+
+def test_auth_refuses_an_empty_token():
+    from src.tv_mcp.server import BearerAuth
+    with pytest.raises(ValueError):
+        BearerAuth(None, "")
+
+
+def test_roku_play_does_not_toggle_while_buffering(monkeypatch):
+    from src.tv_mcp.roku import Roku
+    sent = []
+    r = Roku({"name": "g", "host": "h", "player_id": "p"})
+    monkeypatch.setattr(r, "_call", lambda path, method="GET": '<player state="buffer">' if method == "GET" else sent.append(path) or "")
+    asyncio.run(r.press(["play"]))
+    assert sent == []
