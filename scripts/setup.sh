@@ -10,7 +10,7 @@ uv pip install -q --python .venv/bin/python -r requirements.txt
 
 grep -q '^TV_MCP_TOKEN=' .env 2>/dev/null || .venv/bin/python scripts/pair.py
 chmod 600 .env
-[ -d "$HOME/.pymobiledevice3" ] && chmod -R go-rwx "$HOME/.pymobiledevice3"
+chmod -R go-rwx "$HOME/.pymobiledevice3" 2>/dev/null || true
 
 sudo -v
 [ -e history.db ] && sudo chown "$USER" history.db

@@ -228,14 +228,15 @@ async def _ask(text: str) -> PlainTextResponse:
             json.dump(config, f)
         os.chown(cfg, owner.pw_uid, owner.pw_gid)
         try:
+            claude = _claude(owner.pw_dir)
             proc = await asyncio.create_subprocess_exec(
-                _claude(owner.pw_dir), "-p",
+                claude, "-p",
                 "--tools", "", "--setting-sources", "",
                 "--strict-mcp-config", "--mcp-config", cfg, "--allowedTools", "mcp__tv__*",
                 "--append-system-prompt", "Your final reply is read aloud by Siri: one short, friendly sentence, no formatting.",
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                 user=owner.pw_uid, group=owner.pw_gid, cwd=home,
-                env={"HOME": home, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "CLAUDE_CODE_OAUTH_TOKEN": CLAUDE_CODE_OAUTH_TOKEN},
+                env={"HOME": home, "PATH": f"{os.path.dirname(claude)}:/usr/bin:/bin:/usr/sbin:/sbin", "CLAUDE_CODE_OAUTH_TOKEN": CLAUDE_CODE_OAUTH_TOKEN},
             )
             out, err = await asyncio.wait_for(proc.communicate(text.encode()), timeout=300)
         except FileNotFoundError:

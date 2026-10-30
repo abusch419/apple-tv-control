@@ -15,6 +15,7 @@ def account() -> MyPlexAccount:
     return MyPlexAccount(token=LIBRARY_TOKEN)
 
 
+UNREACHABLE = "Couldn't reach any media server. Is the computer running it awake?"
 _servers: dict = {}
 _loaded_at = 0.0
 _refresh = threading.Lock()
@@ -42,7 +43,7 @@ def servers() -> dict:
             _loaded_at = time.monotonic() - 540
         if not _servers:
             account()
-            raise RuntimeError("Couldn't reach any media server. Is the computer running it awake?")
+            raise RuntimeError(UNREACHABLE)
         return _servers
 
 
@@ -76,22 +77,28 @@ def _summary(server: str, item) -> dict:
 
 def search(query: str, limit: int = 10) -> list[dict]:
     results = []
+    reached = False
     for name, srv in servers().items():
         try:
             items = srv.search(query, limit=limit)
         except Exception:
             continue
+        reached = True
         results += [_summary(name, i) for i in items if i.type in ("show", "movie")]
+    if not reached:
+        raise RuntimeError(UNREACHABLE)
     return results
 
 
 def browse(genre: str | None, kind: str, unwatched_only: bool, limit: int) -> list[dict]:
     results = []
+    reached = False
     for name, srv in servers().items():
         try:
             sections = srv.library.sections()
         except Exception:
             continue
+        reached = True
         for section in sections:
             if section.type != kind:
                 continue
@@ -103,6 +110,8 @@ def browse(genre: str | None, kind: str, unwatched_only: bool, limit: int) -> li
             except Exception:
                 continue
             results += [_summary(name, i) for i in items]
+    if not reached:
+        raise RuntimeError(UNREACHABLE)
     results.sort(key=lambda r: r["audience_rating"] or 0, reverse=True)
     return results[:limit]
 

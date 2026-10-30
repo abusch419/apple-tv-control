@@ -153,6 +153,7 @@ def test_ask_runs_claude_with_no_tools_and_a_minimal_env(monkeypatch):
 
     monkeypatch.setattr(server, "CLAUDE_CODE_OAUTH_TOKEN", "oauth")
     monkeypatch.setattr(server.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(server, "_claude", lambda home: "/bin/claude")
     asyncio.run(server.ask(Req()))
     a = seen["args"]
     assert a[a.index("--tools") + 1] == "" and "--strict-mcp-config" in a and a[a.index("--allowedTools") + 1] == "mcp__tv__*"
