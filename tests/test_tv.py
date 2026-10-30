@@ -298,3 +298,10 @@ def test_tv_names_prefer_an_exact_match_and_accept_the_roku_label(monkeypatch):
     monkeypatch.setattr(server, "remotes", {"Kids Bedroom": kids, "Bedroom": bedroom})
     assert server._tv("bedroom") is bedroom
     assert server._tv("Bedroom (Roku)") is bedroom
+
+
+def test_our_error_messages_reach_claude(monkeypatch):
+    from src.tv_mcp import server
+    monkeypatch.setattr(server, "remotes", {"Living room": object()})
+    with pytest.raises(server.ToolError, match="No TV called 'garage'"):
+        asyncio.run(server.screenshot("garage"))

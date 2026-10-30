@@ -1,4 +1,7 @@
 import asyncio
+import functools
+import inspect
+import traceback
 import hmac
 import json
 import os
@@ -11,6 +14,7 @@ import tempfile
 
 import uvicorn
 from mcp.server.mcpserver import Image, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
@@ -44,6 +48,33 @@ Never rent, buy or subscribe to anything: if a title needs payment, say the pric
 If they say "next" or "not that", rate the current pick disliked and go back to step 3 with the next one."""
 
 mcp = MCPServer("tv", instructions=INSTRUCTIONS)
+_HERE = str(Path(__file__).resolve().parent)
+
+
+def _ours(e: Exception) -> bool:
+    return isinstance(e, (RuntimeError, ValueError)) and traceback.extract_tb(e.__traceback__)[-1].filename.startswith(_HERE)
+
+
+def tool(fn):
+    if inspect.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def wrapped(*a, **k):
+            try:
+                return await fn(*a, **k)
+            except Exception as e:
+                if _ours(e):
+                    raise ToolError(str(e)) from e
+                raise
+    else:
+        @functools.wraps(fn)
+        def wrapped(*a, **k):
+            try:
+                return fn(*a, **k)
+            except Exception as e:
+                if _ours(e):
+                    raise ToolError(str(e)) from e
+                raise
+    return mcp.tool()(wrapped)
 db = history.connect(HISTORY_DB)
 remotes = {t["name"]: AppleTV(t) for t in TVS} | {r["name"]: Roku(r) for r in ROKUS}
 
@@ -74,19 +105,19 @@ async def _after(tv: AppleTV | Roku) -> Image | str:
         return f"Sent. Screenshot unavailable ({e}); don't repeat the input, take a screenshot later."
 
 
-@mcp.tool()
+@tool
 def list_tvs() -> list[str]:
     """Names of the paired TVs, marked (Roku) where it can't send screenshots. The first one is the default."""
     return [f"{n} (Roku)" if isinstance(r, Roku) else n for n, r in remotes.items()]
 
 
-@mcp.tool()
+@tool
 async def screenshot(tv: str | None = None) -> Image | str:
     """Take a picture of what's on the TV screen right now (on a Roku: which app is open and whether it's playing)."""
     return await _shot(_tv(tv))
 
 
-@mcp.tool()
+@tool
 async def press(buttons: list[str], tv: str | None = None) -> Image | str:
     """Press remote buttons in order, then return a screenshot.
     Buttons: up, down, left, right, select, menu (back), home, play, pause (play on something playing does nothing; on a Roku app that doesn't report its player they toggle, so check after),
@@ -97,7 +128,7 @@ async def press(buttons: list[str], tv: str | None = None) -> Image | str:
     return await _after(remote)
 
 
-@mcp.tool()
+@tool
 async def type_text(text: str, tv: str | None = None) -> Image | str:
     """Type into the text field that's focused on the TV (for example a search box), then return a screenshot."""
     remote = _tv(tv)
@@ -106,7 +137,7 @@ async def type_text(text: str, tv: str | None = None) -> Image | str:
     return await _after(remote)
 
 
-@mcp.tool()
+@tool
 async def open_app(app: str, tv: str | None = None) -> Image | str:
     """Open an app by name ("Netflix") or id, wake the TV if needed, then return a screenshot."""
     remote = _tv(tv)
@@ -122,19 +153,19 @@ async def open_app(app: str, tv: str | None = None) -> Image | str:
     return await _after(remote)
 
 
-@mcp.tool()
+@tool
 async def list_apps(tv: str | None = None) -> list[str]:
     """Apps installed on the TV."""
     return [f"{n} ({b})" for n, b in await _tv(tv).apps()]
 
 
-@mcp.tool()
+@tool
 async def library_search(query: str) -> list[dict]:
     """Search every media server this account can reach for a show or movie title."""
     return await asyncio.to_thread(library.search, query)
 
 
-@mcp.tool()
+@tool
 async def library_browse(genre: str | None = None, kind: str = "show", unwatched_only: bool = True, limit: int = 25) -> list[dict]:
     """Top-rated shows or movies across all media servers, optionally by genre (Horror, Comedy, Thriller...).
     kind is "show" or "movie". Shows report episodes_watched so you can tell what they've seen."""
@@ -143,13 +174,13 @@ async def library_browse(genre: str | None = None, kind: str = "show", unwatched
     return await asyncio.to_thread(library.browse, genre, kind, unwatched_only, limit)
 
 
-@mcp.tool()
+@tool
 async def library_set_audio_language(server: str, rating_key: int, language: str = "eng") -> dict:
     """Make a library show (every episode) or movie play in this language. Use 3-letter codes: eng, spa, fra."""
     return await asyncio.to_thread(library.set_audio_language, server, rating_key, language)
 
 
-@mcp.tool()
+@tool
 async def library_play(server: str, rating_key: int, tv: str | None = None) -> str:
     """Start a library show, episode or movie on a Roku (its library app plays it directly), then report what's on."""
     remote = _tv(tv)
@@ -165,7 +196,7 @@ async def library_play(server: str, rating_key: int, tv: str | None = None) -> s
     return f"Sent {title}. " + str(await _after(remote))
 
 
-@mcp.tool()
+@tool
 async def now_playing(tv: str | None = None) -> str:
     """Roku only: which app is open and whether something is playing."""
     remote = _tv(tv)
@@ -174,20 +205,20 @@ async def now_playing(tv: str | None = None) -> str:
     return await remote.status()
 
 
-@mcp.tool()
+@tool
 def history_list(limit: int = 50) -> list[dict]:
     """What the household has watched, newest first, with liked/disliked ratings."""
     return history.recent(db, limit)
 
 
-@mcp.tool()
+@tool
 def history_log(title: str, year: int | None = None, source: str | None = None, watched_on: str | None = None, notes: str | None = None) -> int:
     """Record something they watched (source: library server name, Netflix...). watched_on is YYYY-MM-DD, default today.
     notes: episode, who asked, anything worth remembering. Returns the row id."""
     return history.add(db, title, year, source, watched_on, notes)
 
 
-@mcp.tool()
+@tool
 def history_rate(row_id: int, rating: str, notes: str | None = None) -> str:
     """Record whether they liked it: rating is "liked" or "disliked"."""
     history.rate(db, row_id, rating, notes)
